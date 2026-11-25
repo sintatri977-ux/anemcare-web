@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>AnemCare-Web | Deteksi Dini Anemia Non-Invasif</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        medical: {
+                            50: '#FFF1F2',
+                            100: '#FFE4E6',
+                            200: '#FECDD3',
+                            300: '#FDA4AF',
+                            400: '#FB7185',
+                            500: '#F43F5E',
+                            600: '#E11D48', // Primary Medical Coral/Crimson
+                            700: '#BE123C',
+                            800: '#9F1239',
+                            900: '#881337',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Pengaturan Full Screen & Tipografi Dasar */
+        html, body {
+            min-height: 100dvh;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            background-color: #F8FAFC;
+            color: #0F172A;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .app-shell {
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Animasi Transisi Layar */
+        .screen {
+            display: none;
+            opacity: 0;
+            transform: translateY(12px);
+            transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+
+        .screen.active {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Animasi Pulse Logo */
+        @keyframes softPulse {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 10px 18px rgba(225, 29, 72, 0.22)); }
+            50% { transform: scale(1.04); filter: drop-shadow(0 14px 24px rgba(225, 29, 72, 0.32)); }
+        }
+        .logo-pulse {
+            animation: softPulse 3s infinite ease-in-out;
+        }
+
+        /* Animasi Garis Pemindai Laser Konjungtiva */
+        @keyframes scanLine {
+            0% { top: 8%; opacity: 0.4; }
+            50% { top: 88%; opacity: 1; }
+            100% { top: 8%; opacity: 0.4; }
+        }
+        .scanner-laser {
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #10B981, #34D399, #10B981, transparent);
+            box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.85);
+            border-radius: 999px;
+            animation: scanLine 1.6s infinite ease-in-out;
+            z-index: 20;
+        }
+
+        /* Grid Overlay Pemindaian */
+        .scan-grid {
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* Custom Scrollbar Halus */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #F1F5F9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94A3B8;
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-medical-100 selection:text-medical-800">
+
+    <!-- Toast Notification Container (Pengganti alert) -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md pointer-events-none flex flex-col gap-2"></div>
+
+    <!-- Main Full-Screen Container -->
+    <div class="app-shell w-full bg-gradient-to-br from-slate-50 via-white to-rose-50/40">
+
+        <!-- Top Navigation Bar (Tampil pada Layar 2, 3, dan 4) -->
+        <header id="top-navbar" class="hidden sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 sm:px-6">
+            <div class="max-w-4xl mx-auto flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5 cursor-pointer" onclick="goToScreen(1)">
+                    <!-- Mini Logo SVG -->
+                    <svg class="w-8 h-8 shrink-0" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="miniGrad" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#F43F5E"/>
+                                <stop offset="1" stop-color="#BE123C"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M32 6C32 6 12 27.5 12 41C12 52.0457 20.9543 60 32 60C43.0457 60 52 52.0457 52 41C52 27.5 32 6 32 6Z" fill="url(#miniGrad)"/>
+                        <path d="M19 41C22.5 35.5 27 33 32 33C37 33 41.5 35.5 45 41C41.5 46.5 37 49 32 49C27 49 22.5 46.5 19 41Z" fill="white"/>
+                        <circle cx="32" cy="41" r="4.5" fill="#E11D48"/>
+                    </svg>
+                    <div>
+                        <span class="font-display font-bold text-slate-900 text-base sm:text-lg tracking-tight">AnemCare<span class="text-medical-600">-Web</span></span>
+                    </div>
+                </div>
+
+                <!-- Step Indicator Pill -->
+                <div class="flex items-center gap-1.5 sm:gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200/70">
+                    <span id="nav-step-badge" class="text-xs font-semibold text-medical-700">Langkah 1 dari 3</span>
+                    <div class="flex items-center gap-1 ml-1">
+                        <span id="dot-1" class="w-2 h-2 rounded-full bg-medical-600 transition-all"></span>
+                        <span id="dot-2" class="w-2 h-2 rounded-full bg-slate-300 transition-all"></span>
+                        <span id="dot-3" class="w-2 h-2 rounded-full bg-slate-300 transition-all"></span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ===================================================================== -->
+        <!-- LAYAR 1: SPLASH / WELCOME SCREEN                                      -->
+        <!-- ===================================================================== -->
+        <section id="screen-1" class="screen active flex-1 flex-col items-center justify-center px-5 py-8 sm:px-8 text-center">
+            <div class="w-full max-w-xl mx-auto flex flex-col items-center">
+                
+                <!-- Badge Medis -->
+                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-medical-50 border border-medical-200 text-medical-700 text-xs sm:text-sm font-medium mb-6 shadow-sm">
+                    <span class="w-2 h-2 rounded-full bg-medical-600 animate-ping"></span>
+                    <span>Skrining Kesehatan Digital Non-Invasif</span>
+                </div>
+
+                <!-- Logo Utama AnemCare-Web (Custom SVG Tetes Darah + Mata Medis) -->
+                <div class="logo-pulse mb-4">
+                    <svg class="w-28 h-28 sm:w-32 sm:h-32" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Logo AnemCare-Web">
+                        <defs>
+                            <linearGradient id="dropGradient" x1="25" y1="12" x2="95" y2="108" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#FB7185"/>
+                                <stop offset="50%" stop-color="#E11D48"/>
+                                <stop offset="100%" stop-color="#9F1239"/>
+                            </linearGradient>
+                            <linearGradient id="innerGlow" x1="60" y1="20" x2="60" y2="105" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+                                <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+                            </linearGradient>
+                        </defs>
+                        <!-- Lingkaran Latar Halus -->
+                        <circle cx="60" cy="62" r="52" fill="#FFF1F2" stroke="#FECDD3" stroke-width="2"/>
+                        <!-- Tetesan Darah -->
+                        <path d="M60 12C60 12 24 51.5 24 75C24 94.8823 40.1177 110 60 110C79.8823 110 96 94.8823 96 75C96 51.5 60 12 60 12Z" fill="url(#dropGradient)"/>
+                        <path d="M60 12C60 12 24 51.5 24 75C24 94.8823 40.1177 110 60 110C79.8823 110 96 94.8823 96 75C96 51.5 60 12 60 12Z" fill="url(#innerGlow)"/>
+                        <!-- Simbol Mata & Konjungtiva di Tengah Tetes Darah -->
+                        <path d="M35 75C41.5 64.5 50 59.5 60 59.5C70 59.5 78.5 64.5 85 75C78.5 85.5 70 90.5 60 90.5C50 90.5 41.5 85.5 35 75Z" fill="#FFFFFF"/>
+                        <!-- Lengkungan Konjungtiva Bawah -->
+                        <path d="M40 78.5C45.5 84.5 52.5 87.5 60 87.5C67.5 87.5 74.5 84.5 80 78.5" stroke="#FDA4AF" stroke-width="3" stroke-linecap="round"/>
+                        <!-- Iris & Pupil -->
+                        <circle cx="60" cy="74" r="8.5" fill="#E11D48"/>
+                        <circle cx="60" cy="74" r="3.8" fill="#881337"/>
+                        <circle cx="62.8" cy="71.5" r="1.8" fill="#FFFFFF"/>
+                        <!-- Tanda Plus Medis Kecil -->
+                        <rect x="85" y="22" width="14" height="4" rx="2" fill="#E11D48"/>
+                        <rect x="90" y="17" width="4" height="14" rx="2" fill="#E11D48"/>
+                    </svg>
+                </div>
+
+                <!-- Judul Besar di Bawah Logo -->
+                <h1 class="font-display font-extrabold text-3xl sm:text-5xl text-slate-900 tracking-tight mb-3">
+                    AnemCare<span class="text-medical-600">-Web</span>
+                </h1>
+
+                <!-- Sapaan Selamat Datang -->
+                <h2 class="font-display font-bold text-lg sm:text-2xl text-medical-700 mb-3">
+                    Selamat Datang di AnemCare-Web
+                </h2>
+
+                <!-- Penjelasan Singkat Platform -->
+                <p class="text-slate-600 text-sm sm:text-base leading-relaxed max-w-lg mb-8">
+                    Platform simulasi deteksi dini anemia secara <strong class="text-slate-800 font-semibold">non-invasif (tanpa jarum suntik)</strong> yang memadukan skrining kuesioner gejala klinis dan analisis citra warna <strong class="text-slate-800 font-semibold">konjungtiva palpebra inferior</strong> untuk membantu memantau risiko anemia serta edukasi konsumsi Tablet Tambah Darah (TTD).
+                </p>
+
+                <!-- 3 Highlight Fitur Ringkas -->
+                <div class="grid grid-cols-3 gap-2.5 sm:gap-4 w-full max-w-lg mb-8">
+                    <div class="bg-white/90 border border-slate-200/80 rounded-2xl p-3 shadow-sm flex flex-col items-center">
+                        <div class="w-8 h-8 rounded-xl bg-rose-50 text-medical-600 flex items-center justify-center mb-1.5">
+                            <i data-lucide="clipboard-check" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-slate-800">Kuesioner</span>
+                        <span class="text-[11px] text-slate-500">Gejala 5L & Risiko</span>
+                    </div>
+                    <div class="bg-white/90 border border-slate-200/80 rounded-2xl p-3 shadow-sm flex flex-col items-center">
+                        <div class="w-8 h-8 rounded-xl bg-rose-50 text-medical-600 flex items-center justify-center mb-1.5">
+                            <i data-lucide="scan-eye" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-slate-800">Pindai Mata</span>
+                        <span class="text-[11px] text-slate-500">Konjungtiva Bawah</span>
+                    </div>
+                    <div class="bg-white/90 border border-slate-200/80 rounded-2xl p-3 shadow-sm flex flex-col items-center">
+                        <div class="w-8 h-8 rounded-xl bg-rose-50 text-medical-600 flex items-center justify-center mb-1.5">
+                            <i data-lucide="pill" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-slate-800">Skor & TTD</span>
+                        <span class="text-[11px] text-slate-500">Hasil & Edukasi</span>
+                    </div>
+                </div>
+
+                <!-- Tombol Aksi Utama -->
+                <button onclick="goToScreen(2)" class="w-full sm:w-auto min-w-[260px] bg-medical-600 hover:bg-medical-700 active:scale-[0.98] text-white font-display font-bold text-base sm:text-lg px-8 py-4 rounded-2xl shadow-lg shadow-medical-600/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer">
+                    <span>Mulai Pemeriksaan</span>
+                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
+
+                <p class="mt-4 text-xs text-slate-400">
+                    *Simulasi edukatif skrining awal • Tanpa pengambilan sampel darah
+                </p>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- LAYAR 2: KUISIONER GEJALA & FAKTOR RISIKO                             -->
+        <!-- ===================================================================== -->
+        <section id="screen-2" class="screen flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
+            <div class="w-full max-w-3xl mx-auto flex-1 flex flex-col">
+                
+                <!-- Header Section -->
+                <div class="mb-6">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-medical-600 bg-medical-50 px-3 py-1 rounded-full">Tahap 1 • Skrining Klinis</span>
+                        <span id="quiz-progress-text" class="text-xs sm:text-sm font-semibold text-slate-600">0 dari 7 terjawab</span>
+                    </div>
+                    <h2 class="font-display font-bold text-2xl sm:text-3xl text-slate-900">Kuesioner Gejala & Faktor Risiko</h2>
+                    <p class="text-slate-600 text-sm mt-1">Pilih jawaban yang paling sesuai dengan kondisi yang Anda rasakan dalam 2 minggu terakhir.</p>
+                    
+                    <!-- Progress Bar Kuesioner -->
+                    <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden mt-4">
+                        <div id="quiz-progress-bar" class="h-full bg-medical-600 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Container Pertanyaan Kuesioner (Diisi via JS) -->
+                <div id="questionnaire-list" class="space-y-4 flex-1"></div>
+
+                <!-- Tombol Navigasi Bawah -->
+                <div class="mt-8 pt-4 border-t border-slate-200 flex items-center justify-between gap-3">
+                    <button onclick="goToScreen(1)" class="px-5 py-3.5 rounded-2xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm sm:text-base flex items-center gap-2 transition cursor-pointer">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        <span>Kembali</span>
+                    </button>
+
+                    <button onclick="validateAndProceedToScan()" class="flex-1 sm:flex-initial sm:min-w-[240px] px-6 py-3.5 rounded-2xl bg-medical-600 hover:bg-medical-700 active:scale-[0.99] text-white font-display font-bold text-sm sm:text-base shadow-md shadow-medical-600/20 flex items-center justify-center gap-2 transition cursor-pointer">
+                        <span>Lanjut Pemindaian Mata</span>
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- LAYAR 3: PEMINDAIAN KONJUNGTIVA MATA                                  -->
+        <!-- ===================================================================== -->
+        <section id="screen-3" class="screen flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
+            <div class="w-full max-w-3xl mx-auto flex-1 flex flex-col">
+                
+                <!-- Header Section -->
+                <div class="mb-5">
+                    <span class="text-xs font-bold uppercase tracking-wider text-medical-600 bg-medical-50 px-3 py-1 rounded-full">Tahap 2 • Analisis Citra Non-Invasif</span>
+                    <h2 class="font-display font-bold text-2xl sm:text-3xl text-slate-900 mt-2">Pemindaian Konjungtiva Mata</h2>
+                    <p class="text-slate-600 text-sm mt-1">Tarik perlahan kelopak mata bagian bawah (konjungtiva palpebra inferior) dan posisikan di dalam area bingkai oval.</p>
+                </div>
+
+                <!-- Mode Switcher Tabs -->
+                <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-200/80 rounded-2xl mb-5">
+                    <button id="tab-camera" onclick="switchScanMode('camera')" class="py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition bg-white text-slate-900 shadow-sm cursor-pointer">
+                        <i data-lucide="camera" class="w-4 h-4 text-medical-600"></i>
+                        <span>Kamera Langsung</span>
+                    </button>
+                    <button id="tab-sample" onclick="switchScanMode('sample')" class="py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition text-slate-600 hover:text-slate-900 cursor-pointer">
+                        <i data-lucide="image" class="w-4 h-4 text-medical-600"></i>
+                        <span>Sampel Simulasi / Unggah</span>
+                    </button>
+                </div>
+
+                <!-- Area Viewport Pemindaian -->
+                <div class="bg-slate-900 rounded-3xl overflow-hidden shadow-xl border border-slate-800 relative flex flex-col">
+                    
+                    <!-- Viewport Visual (Aspect Ratio Adaptif) -->
+                    <div id="scanner-viewport" class="relative w-full h-[270px] sm:h-[340px] bg-slate-950 flex items-center justify-center overflow-hidden">
+                        
+                        <!-- 1. Elemen Video Kamera Live -->
+                        <video id="camera-video" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+                        
+                        <!-- 2. Fallback Jika Kamera Tidak Tersedia / Ditolak -->
+                        <div id="camera-fallback" class="hidden flex-col items-center justify-center text-center px-6 py-4 text-slate-300 max-w-md">
+                            <div class="w-12 h-12 rounded-2xl bg-slate-800 text-rose-400 flex items-center justify-center mb-3">
+                                <i data-lucide="video-off" class="w-6 h-6"></i>
+                            </div>
+                            <h4 class="font-semibold text-white text-sm sm:text-base mb-1">Akses Kamera Tidak Tersedia</h4>
+                            <p id="camera-error-msg" class="text-xs text-slate-400 leading-relaxed mb-4">Izin kamera ditolak atau perangkat tidak memiliki kamera aktif. Anda dapat menggunakan Mode Sampel Simulasi atau mengunggah foto mata.</p>
+                            <button onclick="switchScanMode('sample')" class="px-4 py-2 rounded-xl bg-medical-600 hover:bg-medical-700 text-white text-xs font-semibold transition cursor-pointer">
+                                Gunakan Sampel Simulasi
+                            </button>
+                        </div>
+
+                        <!-- 3. Canvas / Visual Sampel Simulasi & Upload -->
+                        <div id="sample-preview-container" class="hidden w-full h-full relative items-center justify-center bg-slate-900">
+                            <!-- Custom SVG Ilustrasi Mata & Konjungtiva Bawah Dinamis -->
+                            <svg id="simulated-eye-svg" class="w-full h-full max-w-md p-4 transition-all duration-300" viewBox="0 0 400 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <!-- Kulit sekitar mata -->
+                                <rect x="20" y="20" width="360" height="200" rx="28" fill="#E8B89A"/>
+                                <!-- Bayangan kelopak atas -->
+                                <path d="M55 105C95 55 305 55 345 105" stroke="#C58B68" stroke-width="8" stroke-linecap="round"/>
+                                <!-- Sklera (Bagian Putih Mata) -->
+                                <path d="M62 108C105 62 295 62 338 108C305 142 95 142 62 108Z" fill="#F8FAFC"/>
+                                <!-- Iris & Pupil -->
+                                <circle cx="200" cy="96" r="34" fill="#4A2E1B"/>
+                                <circle cx="200" cy="96" r="15" fill="#1E1109"/>
+                                <circle cx="210" cy="87" r="5" fill="#FFFFFF" fill-opacity="0.85"/>
+                                <!-- Konjungtiva Palpebra Inferior (Area yang Ditarik & Dipindai) -->
+                                <path id="conjunctiva-tissue" d="M68 112C115 128 285 128 332 112C302 162 98 162 68 112Z" fill="#E11D48" transition="fill 0.3s"/>
+                                <!-- Pembuluh darah kapiler halus -->
+                                <path id="capillary-vessels" d="M110 132Q150 142 190 135M210 136Q255 144 295 130M145 144Q200 150 255 143" stroke="#9F1239" stroke-width="1.8" stroke-linecap="round" opacity="0.65"/>
+                                <!-- Jari simulasi menarik kelopak bawah -->
+                                <path d="M168 215C168 175 182 156 200 156C218 156 232 175 232 215" fill="#DDA685" stroke="#C58B68" stroke-width="3"/>
+                            </svg>
+
+                            <!-- Image element jika user upload gambar dari galeri -->
+                            <img id="uploaded-eye-img" src="" alt="Foto Konjungtiva Unggahan" class="hidden w-full h-full object-cover" />
+                        </div>
+
+                        <!-- Overlay Panduan Bingkai Oval Konjungtiva (Selalu Tampil di Atas Viewport) -->
+                        <div id="guide-overlay" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center scan-grid">
+                            <!-- Bingkai Oval Target Kelopak Mata Bawah -->
+                            <div id="target-oval" class="w-56 h-24 sm:w-72 sm:h-28 rounded-[100%] border-2 border-dashed border-emerald-400 shadow-[0_0_0_9999px_rgba(2,6,23,0.48)] flex items-center justify-center relative transition-all duration-300">
+                                <span class="text-[11px] font-medium text-emerald-300 bg-slate-950/75 px-2.5 py-0.5 rounded-full backdrop-blur-sm">
+                                    Area Konjungtiva Bawah
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Garis Laser Pemindai (Aktif saat proses scanning) -->
+                        <div id="scanner-laser-line" class="scanner-laser hidden"></div>
+
+                        <!-- HUD Status Analisis Real-Time -->
+                        <div id="scan-hud" class="hidden absolute bottom-3 left-3 right-3 bg-slate-950/85 backdrop-blur-md border border-emerald-500/40 rounded-2xl p-3 text-xs text-white flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                                <span id="scan-status-text" class="font-medium text-emerald-300">Menganalisis spektrum RGB & CIELAB (a*)...</span>
+                            </div>
+                            <span id="scan-percent-text" class="font-mono font-bold text-emerald-400">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Kontrol Bawah Viewport (Pilihan Sampel / Upload Foto / Switch Kamera) -->
+                    <div class="bg-slate-900 p-4 border-t border-slate-800">
+                        
+                        <!-- Kontrol Khusus Mode Kamera -->
+                        <div id="camera-controls" class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="info" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                                <span>Pastikan pencahayaan ruangan cukup terang agar warna konjungtiva terlihat jelas.</span>
+                            </div>
+                            <button onclick="toggleCameraFacing()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center gap-1.5 transition cursor-pointer">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                                <span>Ganti Kamera</span>
+                            </button>
+                        </div>
+
+                        <!-- Kontrol Khusus Mode Sampel Simulasi / Upload -->
+                        <div id="sample-controls" class="hidden flex-col gap-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="text-xs font-semibold text-slate-300">Pilih Kondisi Sampel Simulasi:</span>
+                                <label class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition">
+                                    <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                                    <span>Unggah Foto Mata</span>
+                                    <input type="file" id="eye-file-input" accept="image/*" class="hidden" onchange="handleEyeImageUpload(event)">
+                                </label>
+                            </div>
+
+                            <!-- 3 Pilihan Sampel Warna Konjungtiva -->
+                            <div class="grid grid-cols-3 gap-2">
+                                <button type="button" onclick="selectSimulatedSample('normal')" id="btn-sample-normal" class="sample-preset-btn p-2.5 rounded-xl border-2 border-emerald-500 bg-slate-800/90 text-left transition cursor-pointer">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-3.5 h-3.5 rounded-full bg-[#E11D48] border border-white/40 shrink-0"></span>
+                                        <span class="text-xs font-bold text-white truncate">Merah Segar</span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400">Vaskularisasi normal</p>
+                                </button>
+
+                                <button type="button" onclick="selectSimulatedSample('moderate')" id="btn-sample-moderate" class="sample-preset-btn p-2.5 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-800 text-left transition cursor-pointer">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-3.5 h-3.5 rounded-full bg-[#F48FB1] border border-white/40 shrink-0"></span>
+                                        <span class="text-xs font-bold text-white truncate">Merah Muda</span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400">Agak pucat / sedang</p>
+                                </button>
+
+                                <button type="button" onclick="selectSimulatedSample('severe')" id="btn-sample-severe" class="sample-preset-btn p-2.5 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-800 text-left transition cursor-pointer">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-3.5 h-3.5 rounded-full bg-[#F8C8D8] border border-white/40 shrink-0"></span>
+                                        <span class="text-xs font-bold text-white truncate">Sangat Pucat</span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400">Indikasi rendah Hb</p>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hasil Pembacaan Sementara Setelah Pindai -->
+                <div id="scan-result-banner" class="hidden mt-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-emerald-950 text-sm">Pemindaian Konjungtiva Selesai</h4>
+                            <p id="scan-summary-detail" class="text-xs text-emerald-800 mt-0.5">Indeks Kemerahan CIELAB a*: 24.5 • Kategori: Vaskularisasi Baik</p>
+                        </div>
+                    </div>
+                    <button onclick="goToScreen(4)" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-1.5 shrink-0 transition cursor-pointer">
+                        <span>Lihat Skor Risiko</span>
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Tombol Navigasi Bawah Layar 3 -->
+                <div class="mt-6 pt-4 border-t border-slate-200 flex items-center justify-between gap-3">
+                    <button onclick="goToScreen(2)" class="px-5 py-3.5 rounded-2xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm sm:text-base flex items-center gap-2 transition cursor-pointer">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        <span>Kembali</span>
+                    </button>
+
+                    <button id="btn-start-scan" onclick="startConjunctivaScan()" class="flex-1 sm:flex-initial sm:min-w-[260px] px-6 py-3.5 rounded-2xl bg-medical-600 hover:bg-medical-700 active:scale-[0.99] text-white font-display font-bold text-sm sm:text-base shadow-md shadow-medical-600/20 flex items-center justify-center gap-2 transition cursor-pointer">
+                        <i data-lucide="scan-line" class="w-5 h-5"></i>
+                        <span>Pindai & Analisis Konjungtiva</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- LAYAR 4: SKOR RISIKO & EDUKASI TTD (TABLET TAMBAH DARAH)              -->
+        <!-- ===================================================================== -->
+        <section id="screen-4" class="screen flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
+            <div class="w-full max-w-4xl mx-auto flex-1 flex flex-col">
+                
+                <!-- Header Section -->
+                <div class="mb-6">
+                    <span class="text-xs font-bold uppercase tracking-wider text-medical-600 bg-medical-50 px-3 py-1 rounded-full">Tahap 3 • Laporan Skrining & Edukasi</span>
+                    <h2 class="font-display font-bold text-2xl sm:text-3xl text-slate-900 mt-2">Hasil Analisis Risiko Anemia</h2>
+                    <p class="text-slate-600 text-sm mt-1">Ringkasan evaluasi gabungan dari kuesioner gejala klinis dan pemindaian warna konjungtiva mata Anda.</p>
+                </div>
+
+                <!-- Card Utama Skor Risiko Total -->
+                <div id="risk-summary-card" class="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-sm mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                        
+                        <!-- Kolom Kiri: Gauge Persentase Risiko -->
+                        <div class="md:col-span-5 flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                            <div class="relative w-36 h-36 sm:w-40 sm:h-40 flex items-center justify-center">
+                                <svg class="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                                    <circle cx="60" cy="60" r="50" stroke="#E2E8F0" stroke-width="11" fill="none" />
+                                    <circle id="risk-gauge-circle" cx="60" cy="60" r="50" stroke="#10B981" stroke-width="11" stroke-linecap="round" fill="none"
+                                            stroke-dasharray="314.16" stroke-dashoffset="314.16" style="transition: stroke-dashoffset 1s ease, stroke 0.5s ease;" />
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                    <span id="total-risk-score" class="font-display font-extrabold text-3xl sm:text-4xl text-slate-900">0%</span>
+                                    <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Skor Risiko</span>
+                                </div>
+                            </div>
+
+                            <div id="risk-category-badge" class="mt-3 px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold bg-emerald-100 text-emerald-800">
+                                Risiko Rendah
+                            </div>
+                        </div>
+
+                        <!-- Kolom Kanan: Rincian Skor & Rekomendasi Klinis -->
+                        <div class="md:col-span-7 flex flex-col justify-between space-y-4">
+                            <div>
+                                <h3 id="risk-headline" class="font-display font-bold text-lg sm:text-xl text-slate-900">Kondisi Vaskular & Gejala Tergolong Baik</h3>
+                                <p id="risk-recommendation" class="text-slate-600 text-sm leading-relaxed mt-1.5">
+                                    Berdasarkan skrining awal, indikasi anemia Anda tergolong rendah. Tetap pertahankan pola makan bergizi seimbang kaya zat besi dan konsumsi Tablet Tambah Darah (TTD) sesuai program pencegahan.
+                                </p>
+                            </div>
+
+                            <!-- Breakdown Sub-Skor -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                    <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+                                        <span>Skor Kuesioner (Bobot 45%)</span>
+                                        <i data-lucide="clipboard-list" class="w-4 h-4 text-medical-600"></i>
+                                    </div>
+                                    <div class="flex items-baseline justify-between">
+                                        <span id="detail-quiz-score" class="font-display font-bold text-lg text-slate-900">0 / 14</span>
+                                        <span id="detail-quiz-label" class="text-xs font-semibold text-slate-600">Gejala Minimal</span>
+                                    </div>
+                                </div>
+
+                                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                    <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+                                        <span>Analisis Konjungtiva (Bobot 55%)</span>
+                                        <i data-lucide="eye" class="w-4 h-4 text-medical-600"></i>
+                                    </div>
+                                    <div class="flex items-baseline justify-between">
+                                        <span id="detail-scan-index" class="font-display font-bold text-lg text-slate-900">a*: 24.5</span>
+                                        <span id="detail-scan-label" class="text-xs font-semibold text-slate-600">Merah Segar</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bagian Edukasi TTD (Tablet Tambah Darah) -->
+                <div class="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-sm mb-6">
+                    <div class="flex items-center gap-3 mb-5">
+                        <div class="w-11 h-11 rounded-2xl bg-medical-100 text-medical-600 flex items-center justify-center shrink-0">
+                            <i data-lucide="pill" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-display font-bold text-lg sm:text-xl text-slate-900">Panduan & Edukasi Tablet Tambah Darah (TTD)</h3>
+                            <p class="text-xs sm:text-sm text-slate-500">Cara tepat mengonsumsi TTD agar penyerapan zat besi maksimal di dalam tubuh</p>
+                        </div>
+                    </div>
+
+                    <!-- Grid 4 Kartu Edukasi TTD -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Card 1: Dosis Anjuran -->
+                        <div class="p-4 rounded-2xl bg-rose-50/60 border border-rose-100">
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <span class="w-7 h-7 rounded-lg bg-medical-600 text-white font-bold text-xs flex items-center justify-center">1</span>
+                                <h4 class="font-bold text-slate-900 text-sm">Dosis & Aturan Minum</h4>
+                            </div>
+                            <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                                Remaja putri dan wanita usia subur dianjurkan minum <strong>1 tablet per minggu</strong> secara rutin sepanjang tahun (serta 1 tablet/hari selama menstruasi atau sesuai resep dokter/bidan).
+                            </p>
+                        </div>
+
+                        <!-- Card 2: Pendamping Penyerapan -->
+                        <div class="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">2</span>
+                                <h4 class="font-bold text-slate-900 text-sm">Minum Bersama Vitamin C</h4>
+                            </div>
+                            <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                                Telan TTD menggunakan <strong>air putih</strong> atau minuman tinggi <strong>Vitamin C</strong> (seperti jus jeruk, jambu biji, atau tomat) untuk meningkatkan penyerapan zat besi hingga 3x lipat.
+                            </p>
+                        </div>
+
+                        <!-- Card 3: Pantangan Penghambat -->
+                        <div class="p-4 rounded-2xl bg-amber-50/60 border border-amber-100">
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <span class="w-7 h-7 rounded-lg bg-amber-600 text-white font-bold text-xs flex items-center justify-center">3</span>
+                                <h4 class="font-bold text-slate-900 text-sm">Hindari Teh, Kopi & Susu</h4>
+                            </div>
+                            <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                                Jangan meminum TTD bersamaan dengan <strong>teh, kopi, susu, atau obat maag (antasida)</strong> karena kandungan tanin, kafein, dan kalsium dapat menghambat penyerapan zat besi. Beri jeda minimal 2 jam.
+                            </p>
+                        </div>
+
+                        <!-- Card 4: Efek Samping & Nutrisi -->
+                        <div class="p-4 rounded-2xl bg-sky-50/60 border border-sky-100">
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <span class="w-7 h-7 rounded-lg bg-sky-600 text-white font-bold text-xs flex items-center justify-center">4</span>
+                                <h4 class="font-bold text-slate-900 text-sm">Efek Samping & Nutrisi Harian</h4>
+                            </div>
+                            <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                                Feses berwarna kehitaman atau mual ringan adalah <strong>reaksi normal dan tidak berbahaya</strong> (minum setelah makan malam sebelum tidur). Imbangi dengan daging merah, hati ayam, telur, bayam, dan kacang-kacangan.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Disclaimer Medis -->
+                <div class="p-4 rounded-2xl bg-slate-100 border border-slate-200 flex items-start gap-3 mb-6">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-slate-600 shrink-0 mt-0.5"></i>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        <strong>Disclaimer Medis:</strong> AnemCare-Web merupakan alat simulasi skrining awal non-invasif dan <strong>bukan pengganti diagnosis medis laboratorium</strong>. Untuk memastikan kadar Hemoglobin (Hb) secara akurat, segera kunjungi Puskesmas, klinik, atau fasilitas pelayanan kesehatan terdekat.
+                    </p>
+                </div>
+
+                <!-- Tombol Aksi Akhir -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 pb-6">
+                    <button onclick="goToScreen(3)" class="w-full sm:w-auto px-5 py-3.5 rounded-2xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 transition cursor-pointer">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        <span>Pindai Ulang Mata</span>
+                    </button>
+
+                    <button onclick="resetExamination()" class="w-full sm:w-auto min-w-[240px] px-6 py-3.5 rounded-2xl bg-medical-600 hover:bg-medical-700 active:scale-[0.99] text-white font-display font-bold text-sm sm:text-base shadow-md shadow-medical-600/20 flex items-center justify-center gap-2 transition cursor-pointer">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        <span>Ulangi Pemeriksaan</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Hidden Canvas untuk Ekstraksi Piksel Gambar Upload / Kamera -->
+    <canvas id="pixel-analysis-canvas" class="hidden" width="160" height="120"></canvas>
+
+    <script>
+        // =========================================================================
+        // STATE & DATA APLIKASI ANEMCARE-WEB
+        // =========================================================================
+        const APP_STATE = {
+            currentScreen: 1,
+            answers: {}, // Menyimpan indeks pertanyaan -> skor (0, 1, 2)
+            scanMode: 'camera', // 'camera' | 'sample'
+            cameraStream: null,
+            facingMode: 'user', // 'user' | 'environment'
+            selectedSampleType: 'normal', // 'normal' | 'moderate' | 'severe' | 'uploaded'
+            scanCompleted: false,
+            scanResult: {
+                riskContribution: 12, // 0 - 100
+                cielabA: 24.8,
+                label: 'Merah Segar (Normal)',
+                hexColor: '#E11D48'
+            }
+        };
+
+        // Daftar 7 Pertanyaan Klinis Skrining Anemia
+        const QUESTIONS = [
+            {
+                id: 'q1',
+                category: 'Gejala 5L',
+                text: 'Apakah Anda sering merasa cepat lelah, letih, lesu, lemas, atau lunglai saat beraktivitas ringan sehari-hari?'
+            },
+            {
+                id: 'q2',
+                category: 'Sirkulasi Oksigen',
+                text: 'Apakah Anda sering merasa pusing, kepala terasa ringan, atau pandangan berkunang-kunang terutama saat bangkit dari duduk/jongkok?'
+            },
+            {
+                id: 'q3',
+                category: 'Kognitif & Fokus',
+                text: 'Apakah Anda mengalami penurunan konsentrasi, sulit fokus belajar/bekerja, atau mudah mengantuk di siang hari?'
+            },
+            {
+                id: 'q4',
+                category: 'Tanda Fisik',
+                text: 'Apakah wajah, bibir, telapak tangan, atau kelopak mata bagian dalam Anda terlihat lebih pucat dari biasanya?'
+            },
+            {
+                id: 'q5',
+                category: 'Kardiorespirasi',
+                text: 'Apakah jantung Anda mudah berdebar-debar atau napas terasa pendek saat menaiki tangga atau berjalan cepat?'
+            },
+            {
+                id: 'q6',
+                category: 'Asupan Nutrisi',
+                text: 'Apakah Anda jarang mengonsumsi makanan sumber zat besi (daging merah, hati, ikan, telur, bayam) atau sering minum teh/kopi tepat setelah makan?'
+            },
+            {
+                id: 'q7',
+                category: 'Faktor Risiko',
+                text: 'Apakah Anda mengalami menstruasi dengan volume banyak/berkepanjangan, sedang hamil, atau memiliki riwayat anemia sebelumnya?'
+            }
+        ];
+
+        const ANSWER_OPTIONS = [
+            { label: 'Tidak Pernah', score: 0 },
+            { label: 'Kadang-kadang', score: 1 },
+            { label: 'Sering', score: 2 }
+        ];
+
+        // Konfigurasi Sampel Simulasi Konjungtiva
+        const SAMPLE_PRESETS = {
+            normal: {
+                hex: '#E11D48',
+                capillaryOpacity: '0.65',
+                cielabA: 24.6,
+                riskScore: 10,
+                label: 'Merah Segar (Normal)'
+            },
+            moderate: {
+                hex: '#F48FB1',
+                capillaryOpacity: '0.35',
+                cielabA: 14.2,
+                riskScore: 52,
+                label: 'Merah Muda Pucat (Sedang)'
+            },
+            severe: {
+                hex: '#F8C8D8',
+                capillaryOpacity: '0.15',
+                cielabA: 6.4,
+                riskScore: 88,
+                label: 'Sangat Pucat (Tinggi)'
+            }
+        };
+
+        // =========================================================================
+        // INISIALISASI HALAMAN
+        // =========================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            renderQuestionnaire();
+        });
+
+        // =========================================================================
+        // NAVIGASI ANTAR LAYAR
+        // =========================================================================
+        function goToScreen(screenNumber) {
+            // Hentikan kamera jika meninggalkan Layar 3
+            if (APP_STATE.currentScreen === 3 && screenNumber !== 3) {
+                stopCameraStream();
+            }
+
+            // Sembunyikan semua layar
+            document.querySelectorAll('.screen').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // Tampilkan layar tujuan
+            const targetScreen = document.getElementById(`screen-${screenNumber}`);
+            if (targetScreen) {
+                targetScreen.classList.add('active');
+                APP_STATE.currentScreen = screenNumber;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            // Atur visibilitas Top Navbar & Step Indicator
+            const topNavbar = document.getElementById('top-navbar');
+            if (screenNumber === 1) {
+                topNavbar.classList.add('hidden');
+            } else {
+                topNavbar.classList.remove('hidden');
+                updateTopNavbarStep(screenNumber);
+            }
+
+            // Trigger khusus saat masuk layar tertentu
+            if (screenNumber === 3) {
+                if (APP_STATE.scanMode === 'camera') {
+                    initCamera();
+                } else {
+                    switchScanMode('sample');
+                }
+            } else if (screenNumber === 4) {
+                calculateAndRenderFinalReport();
+            }
+
+            lucide.createIcons();
+        }
+
+        function updateTopNavbarStep(screenNumber) {
+            const stepMap = { 2: 1, 3: 2, 4: 3 };
+            const currentStep = stepMap[screenNumber] || 1;
+            
+            document.getElementById('nav-step-badge').textContent = `Langkah ${currentStep} dari 3`;
+            
+            for (let i = 1; i <= 3; i++) {
+                const dot = document.getElementById(`dot-${i}`);
+                if (i <= currentStep) {
+                    dot.classList.remove('bg-slate-300', 'w-2');
+                    dot.classList.add('bg-medical-600', i === currentStep ? 'w-4' : 'w-2');
+                } else {
+                    dot.classList.remove('bg-medical-600', 'w-4');
+                    dot.classList.add('bg-slate-300', 'w-2');
+                }
+            }
+        }
+
+        // =========================================================================
+        // NOTIFIKASI TOAST (PENGGANTI ALERT)
+        // =========================================================================
+        function showToast(message, type = 'warning') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const styles = {
+                warning: 'bg-amber-900/95 text-amber-50 border-amber-700',
+                error: 'bg-rose-900/95 text-rose-50 border-rose-700',
+                success: 'bg-emerald-900/95 text-emerald-50 border-emerald-700'
+            };
+
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl border shadow-lg backdrop-blur-md text-xs sm:text-sm font-medium flex items-center gap-2.5 transition-all duration-300 transform translate-y-0 opacity-100 ${styles[type] || styles.warning}`;
+            toast.innerHTML = `
+                <i data-lucide="${type === 'success' ? 'check-circle' : 'alert-circle'}" class="w-4 h-4 shrink-0"></i>
+                <span>${message}</span>
+            `;
+
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        // =========================================================================
+        // LOGIKA LAYAR 2: KUISIONER GEJALA
+        // =========================================================================
+        function renderQuestionnaire() {
+            const container = document.getElementById('questionnaire-list');
+            container.innerHTML = '';
+
+            QUESTIONS.forEach((q, idx) => {
+                const selectedScore = APP_STATE.answers[q.id];
+                const isAnswered = selectedScore !== undefined;
+
+                const card = document.createElement('div');
+                card.id = `card-${q.id}`;
+                card.className = `bg-white rounded-2xl p-4 sm:p-5 border transition-all ${isAnswered ? 'border-medical-200 shadow-sm' : 'border-slate-200/90'}`;
+
+                let optionsHTML = ANSWER_OPTIONS.map(opt => {
+                    const active = selectedScore === opt.score;
+                    return `
+                        <button type="button"
+                            onclick="selectAnswer('${q.id}', ${opt.score})"
+                            class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold border transition-all flex items-center justify-center gap-1.5 cursor-pointer
+                            ${active 
+                                ? 'bg-medical-600 text-white border-medical-600 shadow-sm shadow-medical-600/20' 
+                                : 'bg-slate-50 hover:bg-rose-50/70 text-slate-700 border-slate-200'}">
+                            <span>${opt.label}</span>
+                        </button>
+                    `;
+                }).join('');
+
+                card.innerHTML = `
+                    <div class="flex items-start justify-between gap-2 mb-2">
+                        <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-medical-600">
+                            <span>Pertanyaan ${idx + 1}</span>
+                            <span class="text-slate-300">•</span>
+                            <span class="text-slate-500 font-semibold">${q.category}</span>
+                        </span>
+                        ${isAnswered ? '<span class="text-emerald-600 text-xs font-semibold flex items-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5"></i>Terisi</span>' : ''}
+                    </div>
+                    <p class="text-slate-800 font-medium text-sm sm:text-base leading-snug mb-3.5">${q.text}</p>
+                    <div class="grid grid-cols-3 gap-2">
+                        ${optionsHTML}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+
+            updateQuizProgress();
+            lucide.createIcons();
+        }
+
+        function selectAnswer(questionId, score) {
+            APP_STATE.answers[questionId] = score;
+            renderQuestionnaire();
+        }
+
+        function updateQuizProgress() {
+            const answeredCount = Object.keys(APP_STATE.answers).length;
+            const total = QUESTIONS.length;
+            const pct = Math.round((answeredCount / total) * 100);
+
+            document.getElementById('quiz-progress-text').textContent = `${answeredCount} dari ${total} terjawab`;
+            document.getElementById('quiz-progress-bar').style.width = `${pct}%`;
+        }
+
+        function validateAndProceedToScan() {
+            const unansweredIndex = QUESTIONS.findIndex(q => APP_STATE.answers[q.id] === undefined);
+            if (unansweredIndex !== -1) {
+                const missingQ = QUESTIONS[unansweredIndex];
+                showToast(`Mohon jawab Pertanyaan ${unansweredIndex + 1} terlebih dahulu.`, 'warning');
+                const cardEl = document.getElementById(`card-${missingQ.id}`);
+                if (cardEl) {
+                    cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    cardEl.classList.add('ring-2', 'ring-amber-400');
+                    setTimeout(() => cardEl.classList.remove('ring-2', 'ring-amber-400'), 1800);
+                }
+                return;
+            }
+            goToScreen(3);
+        }
+
+        // =========================================================================
+        // LOGIKA LAYAR 3: PEMINDAIAN KONJUNGTIVA MATA
+        // =========================================================================
+        function switchScanMode(mode) {
+            APP_STATE.scanMode = mode;
+            const tabCamera = document.getElementById('tab-camera');
+            const tabSample = document.getElementById('tab-sample');
+            const cameraControls = document.getElementById('camera-controls');
+            const sampleControls = document.getElementById('sample-controls');
+            const sampleContainer = document.getElementById('sample-preview-container');
+            const videoEl = document.getElementById('camera-video');
+            const fallbackEl = document.getElementById('camera-fallback');
+
+            if (mode === 'camera') {
+                tabCamera.className = 'py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition bg-white text-slate-900 shadow-sm cursor-pointer';
+                tabSample.className = 'py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition text-slate-600 hover:text-slate-900 cursor-pointer';
+                
+                cameraControls.classList.remove('hidden');
+                sampleControls.classList.add('hidden');
+                sampleControls.classList.remove('flex');
+                sampleContainer.classList.add('hidden');
+                sampleContainer.classList.remove('flex');
+
+                initCamera();
+            } else {
+                stopCameraStream();
+                tabSample.className = 'py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition bg-white text-slate-900 shadow-sm cursor-pointer';
+                tabCamera.className = 'py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition text-slate-600 hover:text-slate-900 cursor-pointer';
+
+                cameraControls.classList.add('hidden');
+                videoEl.classList.add('hidden');
+                fallbackEl.classList.add('hidden');
+                fallbackEl.classList.remove('flex');
+
+                sampleControls.classList.remove('hidden');
+                sampleControls.classList.add('flex');
+                sampleContainer.classList.remove('hidden');
+                sampleContainer.classList.add('flex');
+
+                if (APP_STATE.selectedSampleType === 'uploaded') {
+                    // Tetap tampilkan gambar unggahan
+                } else {
+                    selectSimulatedSample(APP_STATE.selectedSampleType || 'normal');
+                }
+            }
+            lucide.createIcons();
+        }
+
+        async function initCamera() {
+            const videoEl = document.getElementById('camera-video');
+            const fallbackEl = document.getElementById('camera-fallback');
+            const errMsgEl = document.getElementById('camera-error-msg');
+
+            stopCameraStream();
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                videoEl.classList.add('hidden');
+                fallbackEl.classList.remove('hidden');
+                fallbackEl.classList.add('flex');
+                errMsgEl.textContent = 'Browser Anda tidak mendukung akses kamera langsung. Silakan gunakan Mode Sampel Simulasi atau Unggah Foto.';
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: APP_STATE.facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                });
+                APP_STATE.cameraStream = stream;
+                videoEl.srcObject = stream;
+                videoEl.classList.remove('hidden');
+                fallbackEl.classList.add('hidden');
+                fallbackEl.classList.remove('flex');
+            } catch (err) {
+                videoEl.classList.add('hidden');
+                fallbackEl.classList.remove('hidden');
+                fallbackEl.classList.add('flex');
+                errMsgEl.textContent = 'Izin kamera ditolak atau kamera tidak terdeteksi. Gunakan tab "Sampel Simulasi / Unggah" untuk melanjutkan.';
+            }
+        }
+
+        function stopCameraStream() {
+            if (APP_STATE.cameraStream) {
+                APP_STATE.cameraStream.getTracks().forEach(track => track.stop());
+                APP_STATE.cameraStream = null;
+            }
+        }
+
+        function toggleCameraFacing() {
+            APP_STATE.facingMode = APP_STATE.facingMode === 'user' ? 'environment' : 'user';
+            initCamera();
+        }
+
+        function selectSimulatedSample(type) {
+            APP_STATE.selectedSampleType = type;
+            const preset = SAMPLE_PRESETS[type];
+            if (!preset) return;
+
+            // Tampilkan SVG Simulasi, sembunyikan img upload
+            document.getElementById('simulated-eye-svg').classList.remove('hidden');
+            document.getElementById('uploaded-eye-img').classList.add('hidden');
+
+            // Ubah warna jaringan konjungtiva pada SVG
+            const tissueEl = document.getElementById('conjunctiva-tissue');
+            const vesselEl = document.getElementById('capillary-vessels');
+            if (tissueEl) tissueEl.setAttribute('fill', preset.hex);
+            if (vesselEl) vesselEl.setAttribute('opacity', preset.capillaryOpacity);
+
+            // Highlight tombol sampel aktif
+            ['normal', 'moderate', 'severe'].forEach(key => {
+                const btn = document.getElementById(`btn-sample-${key}`);
+                if (key === type) {
+                    btn.classList.remove('border-slate-700', 'bg-slate-800/50');
+                    btn.classList.add('border-2', 'border-emerald-500', 'bg-slate-800/90');
+                } else {
+                    btn.classList.remove('border-2', 'border-emerald-500', 'bg-slate-800/90');
+                    btn.classList.add('border', 'border-slate-700', 'bg-slate-800/50');
+                }
+            });
+        }
+
+        function handleEyeImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imgEl = document.getElementById('uploaded-eye-img');
+                imgEl.src = e.target.result;
+                imgEl.classList.remove('hidden');
+                document.getElementById('simulated-eye-svg').classList.add('hidden');
+                APP_STATE.selectedSampleType = 'uploaded';
+
+                // Reset highlight preset buttons
+                ['normal', 'moderate', 'severe'].forEach(key => {
+                    const btn = document.getElementById(`btn-sample-${key}`);
+                    btn.classList.remove('border-2', 'border-emerald-500', 'bg-slate-800/90');
+                    btn.classList.add('border', 'border-slate-700', 'bg-slate-800/50');
+                });
+
+                showToast('Foto mata berhasil dimuat. Tekan "Pindai & Analisis Konjungtiva".', 'success');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Ekstraksi Warna Rata-rata di Area Tengah (ROI Konjungtiva) dari Video atau Gambar Unggahan
+        function analyzeImageColorROI(sourceElement) {
+            try {
+                const canvas = document.getElementById('pixel-analysis-canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(sourceElement, 0, 0, canvas.width, canvas.height);
+
+                // Ambil sampel area tengah (Region of Interest oval konjungtiva)
+                const roiX = Math.floor(canvas.width * 0.35);
+                const roiY = Math.floor(canvas.height * 0.42);
+                const roiW = Math.floor(canvas.width * 0.30);
+                const roiH = Math.floor(canvas.height * 0.18);
+
+                const imgData = ctx.getImageData(roiX, roiY, roiW, roiH).data;
+                let rSum = 0, gSum = 0, bSum = 0, count = 0;
+
+                for (let i = 0; i < imgData.length; i += 4) {
+                    rSum += imgData[i];
+                    gSum += imgData[i + 1];
+                    bSum += imgData[i + 2];
+                    count++;
+                }
+
+                const rAvg = rSum / count;
+                const gAvg = gSum / count;
+                const bAvg = bSum / count;
+
+                // Hitung Erythema / Redness Index pendekatan CIELAB a*
+                const rednessDiff = Math.max(0, rAvg - ((gAvg + bAvg) / 2));
+                const cielabA = parseFloat(Math.min(32, Math.max(4, (rednessDiff * 0.32) + 5)).toFixed(1));
+
+                let riskScore = 25;
+                let label = 'Merah Muda (Sedang)';
+                if (cielabA >= 20) {
+                    riskScore = 15;
+                    label = 'Merah Segar (Normal)';
+                } else if (cielabA >= 12) {
+                    riskScore = 50;
+                    label = 'Merah Muda Pucat (Sedang)';
+                } else {
+                    riskScore = 82;
+                    label = 'Sangat Pucat (Tinggi)';
+                }
+
+                return { riskContribution: riskScore, cielabA, label };
+            } catch (e) {
+                return { riskContribution: 22, cielabA: 21.4, label: 'Merah Segar (Normal)' };
+            }
+        }
+
+        function startConjunctivaScan() {
+            const btnScan = document.getElementById('btn-start-scan');
+            const laserEl = document.getElementById('scanner-laser-line');
+            const hudEl = document.getElementById('scan-hud');
+            const statusText = document.getElementById('scan-status-text');
+            const percentText = document.getElementById('scan-percent-text');
+            const targetOval = document.getElementById('target-oval');
+            const resultBanner = document.getElementById('scan-result-banner');
+
+            // Cek jika mode kamera tetapi kamera gagal aktif
+            if (APP_STATE.scanMode === 'camera' && !APP_STATE.cameraStream) {
+                showToast('Kamera tidak aktif. Beralih ke Sampel Simulasi atau izinkan kamera.', 'warning');
+                return;
+            }
+
+            btnScan.disabled = true;
+            btnScan.classList.add('opacity-70', 'cursor-not-allowed');
+            laserEl.classList.remove('hidden');
+            hudEl.classList.remove('hidden');
+            resultBanner.classList.add('hidden');
+            targetOval.classList.remove('border-dashed', 'border-emerald-400');
+            targetOval.classList.add('border-solid', 'border-emerald-300', 'scale-105');
+
+            let progress = 0;
+            const steps = [
+                { pct: 25, msg: 'Mendeteksi batas kelopak mata bawah...' },
+                { pct: 55, msg: 'Mengekstrak spektrum RGB & CIELAB a*...' },
+                { pct: 85, msg: 'Menghitung indeks perfusi kapiler...' },
+                { pct: 100, msg: 'Analisis citra konjungtiva selesai!' }
+            ];
+
+            const interval = setInterval(() => {
+                progress += 5;
+                percentText.textContent = `${progress}%`;
+
+                const currentStage = steps.find(s => progress <= s.pct);
+                if (currentStage) statusText.textContent = currentStage.msg;
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+
+                    // Tentukan hasil berdasarkan sumber pemindaian
+                    if (APP_STATE.scanMode === 'camera' && APP_STATE.cameraStream) {
+                        const videoEl = document.getElementById('camera-video');
+                        APP_STATE.scanResult = analyzeImageColorROI(videoEl);
+                    } else if (APP_STATE.selectedSampleType === 'uploaded') {
+                        const imgEl = document.getElementById('uploaded-eye-img');
+                        APP_STATE.scanResult = analyzeImageColorROI(imgEl);
+                    } else {
+                        const preset = SAMPLE_PRESETS[APP_STATE.selectedSampleType] || SAMPLE_PRESETS.normal;
+                        APP_STATE.scanResult = {
+                            riskContribution: preset.riskScore,
+                            cielabA: preset.cielabA,
+                            label: preset.label
+                        };
+                    }
+
+                    APP_STATE.scanCompleted = true;
+
+                    // Update UI setelah scan selesai
+                    setTimeout(() => {
+                        laserEl.classList.add('hidden');
+                        hudEl.classList.add('hidden');
+                        targetOval.classList.remove('scale-105');
+                        btnScan.disabled = false;
+                        btnScan.classList.remove('opacity-70', 'cursor-not-allowed');
+
+                        document.getElementById('scan-summary-detail').textContent = 
+                            `Indeks Kemerahan CIELAB a*: ${APP_STATE.scanResult.cielabA} • Kategori: ${APP_STATE.scanResult.label}`;
+                        resultBanner.classList.remove('hidden');
+
+                        showToast('Pemindaian berhasil! Melanjutkan ke hasil skor risiko...', 'success');
+                        
+                        // Otomatis lanjut ke Layar 4 setelah 1.2 detik agar mulus
+                        setTimeout(() => {
+                            if (APP_STATE.currentScreen === 3) {
+                                goToScreen(4);
+                            }
+                        }, 1200);
+                    }, 350);
+                }
+            }, 90);
+        }
+
+        // =========================================================================
+        // LOGIKA LAYAR 4: SKOR RISIKO GABUNGAN & EDUKASI TTD
+        // =========================================================================
+        function calculateAndRenderFinalReport() {
+            // 1. Hitung Skor Kuesioner (Maksimal 7 * 2 = 14)
+            let rawQuizScore = 0;
+            QUESTIONS.forEach(q => {
+                rawQuizScore += (APP_STATE.answers[q.id] || 0);
+            });
+            const maxQuizScore = QUESTIONS.length * 2;
+            const quizPercentage = (rawQuizScore / maxQuizScore) * 100;
+
+            // 2. Ambil Skor Pemindaian Konjungtiva (Jika user belum klik pindai, pakai default sample)
+            const scanPercentage = APP_STATE.scanResult.riskContribution;
+
+            // 3. Gabungkan Skor (Bobot: 45% Kuesioner + 55% Pemindaian Konjungtiva)
+            const totalRisk = Math.round((quizPercentage * 0.45) + (scanPercentage * 0.55));
+
+            // 4. Tentukan Kategori Risiko
+            let category = 'Risiko Rendah';
+            let badgeClass = 'bg-emerald-100 text-emerald-800';
+            let strokeColor = '#10B981';
+            let headline = 'Indikasi Risiko Anemia Rendah';
+            let recommendation = 'Hasil skrining menunjukkan gejala klinis minimal dan warna konjungtiva tampak segar. Pertahankan pola makan bergizi seimbang kaya zat besi dan konsumsi Tablet Tambah Darah (TTD) secara rutin 1 tablet per minggu sebagai pencegahan.';
+
+            if (totalRisk >= 65) {
+                category = 'Risiko Tinggi';
+                badgeClass = 'bg-rose-100 text-rose-800';
+                strokeColor = '#E11D48';
+                headline = 'Terdeteksi Indikasi Risiko Anemia Tinggi';
+                recommendation = 'Kombinasi keluhan gejala klinis dan tingkat kepucatan konjungtiva mengarah pada risiko anemia yang tinggi. Sangat disarankan segera memeriksakan kadar Hemoglobin (Hb) di Puskesmas atau dokter untuk mendapatkan terapi TTD yang tepat.';
+            } else if (totalRisk >= 35) {
+                category = 'Risiko Sedang';
+                badgeClass = 'bg-amber-100 text-amber-800';
+                strokeColor = '#F59E0B';
+                headline = 'Terdeteksi Indikasi Risiko Anemia Sedang';
+                recommendation = 'Terdapat beberapa tanda gejala awal anemia atau sedikit kepucatan pada konjungtiva bawah. Tingkatkan konsumsi makanan kaya zat besi dan Vitamin C, konsumsi TTD sesuai anjuran, serta lakukan pengecekan Hb berkala di fasilitas kesehatan.';
+            }
+
+            // 5. Render ke Elemen DOM
+            document.getElementById('total-risk-score').textContent = `${totalRisk}%`;
+            
+            const badgeEl = document.getElementById('risk-category-badge');
+            badgeEl.textContent = category;
+            badgeEl.className = `mt-3 px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold ${badgeClass}`;
+
+            document.getElementById('risk-headline').textContent = headline;
+            document.getElementById('risk-recommendation').textContent = recommendation;
+
+            // Animasi Lingkaran Gauge (Keliling lingkaran r=50 adalah ~314.16)
+            const circumference = 314.16;
+            const offset = circumference - (totalRisk / 100) * circumference;
+            const gaugeCircle = document.getElementById('risk-gauge-circle');
+            gaugeCircle.style.stroke = strokeColor;
+            setTimeout(() => {
+                gaugeCircle.style.strokeDashoffset = offset;
+            }, 100);
+
+            // Rincian Sub-Skor
+            document.getElementById('detail-quiz-score').textContent = `${rawQuizScore} / ${maxQuizScore}`;
+            document.getElementById('detail-quiz-label').textContent = 
+                rawQuizScore >= 9 ? 'Gejala Sering' : (rawQuizScore >= 4 ? 'Gejala Sedang' : 'Gejala Minimal');
+
+            document.getElementById('detail-scan-index').textContent = `a*: ${APP_STATE.scanResult.cielabA}`;
+            document.getElementById('detail-scan-label').textContent = APP_STATE.scanResult.label;
+        }
+
+        // =========================================================================
+        // RESET PEMERIKSAAN
+        // =========================================================================
+        function resetExamination() {
+            APP_STATE.answers = {};
+            APP_STATE.scanCompleted = false;
+            APP_STATE.selectedSampleType = 'normal';
+            APP_STATE.scanResult = {
+                riskContribution: 10,
+                cielabA: 24.6,
+                label: 'Merah Segar (Normal)'
+            };
+
+            document.getElementById('scan-result-banner').classList.add('hidden');
+            document.getElementById('risk-gauge-circle').style.strokeDashoffset = 314.16;
+            
+            renderQuestionnaire();
+            goToScreen(1);
+            showToast('Data pemeriksaan telah diatur ulang.', 'success');
+        }
+    </script>
+</body>
+</html>
